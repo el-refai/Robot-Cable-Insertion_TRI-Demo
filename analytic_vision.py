@@ -10,10 +10,14 @@ import numpy as np
 import threading
 import time
 import signal
+import sys
+import ogl_viewer.viewer as gl
+import pyzed.sl as sl
 
 zed_list = []
 left_list = []
 depth_list = []
+pointcloud_list = []
 timestamp_list = []
 thread_list = []
 stop_signal = False
@@ -24,12 +28,13 @@ def signal_handler(signal, frame):
     time.sleep(0.5)
     exit()
 
-def grab_run(index):
+def grab_run(index, res):
     global stop_signal
     global zed_list
     global timestamp_list
     global left_list
     global depth_list
+    global pointcloud_list
 
     runtime = sl.RuntimeParameters()
     while not stop_signal:
@@ -37,6 +42,7 @@ def grab_run(index):
         if err == sl.ERROR_CODE.SUCCESS:
             zed_list[index].retrieve_image(left_list[index], sl.VIEW.LEFT)
             zed_list[index].retrieve_measure(depth_list[index], sl.MEASURE.DEPTH)
+            zed_list[index].retrieve_measure(pointcloud_list[index], sl.MEASURE.XYZRGBA, sl.MEM.CPU, res)
             timestamp_list[index] = zed_list[index].get_timestamp(sl.TIME_REFERENCE.CURRENT).data_ns
         time.sleep(0.001) #1ms
     zed_list[index].close()
@@ -48,10 +54,13 @@ def main():
     global depth_list
     global timestamp_list
     global thread_list
+    global pointcloud_list
     signal.signal(signal.SIGINT, signal_handler)
 
     print("Running...")
-    init = sl.InitParameters()
+    init = sl.InitParameters(depth_mode=sl.DEPTH_MODE.ULTRA,
+                                 coordinate_units=sl.UNIT.METER,
+                                 coordinate_system=sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP)
     init.camera_resolution = sl.RESOLUTION.HD720
     init.camera_fps = 30  # The framerate is lowered to avoid any USB3 bandwidth issues
 
@@ -67,6 +76,7 @@ def main():
         zed_list.append(sl.Camera())
         left_list.append(sl.Mat())
         depth_list.append(sl.Mat())
+        pointcloud_list.append(sl.Mat(res.width, res.height, sl.MAT_TYPE.F32_C4, sl.MEM.CPU))
         timestamp_list.append(0)
         last_ts_list.append(0)
         status = zed_list[index].open(init)
@@ -75,27 +85,48 @@ def main():
             zed_list[index].close()
         index = index +1
 
+    res = sl.Resolution()
+    res.width = 720
+    res.height = 404
+
     #Start camera threads
     for index in range(0, len(zed_list)):
         if zed_list[index].is_opened():
-            thread_list.append(threading.Thread(target=grab_run, args=(index,)))
+            thread_list.append(threading.Thread(target=grab_run, args=(index,res,)))
             thread_list[index].start()
-    
+
+    camera_model = zed_list[0].get_camera_information().camera_model
+    # Create OpenGL viewer
+    viewer = gl.GLViewer()
+    viewer.init(1, sys.argv, camera_model, res)
+
     #Display camera images
     key = ''
-    while key != 113:  # for 'q' key
-        for index in range(0, len(zed_list)):
-            if zed_list[index].is_opened():
-                if (timestamp_list[index] > last_ts_list[index]):
-                    cv2.imshow(name_list[index], left_list[index].get_data())
-                    x = round(depth_list[index].get_width() / 2)
-                    y = round(depth_list[index].get_height() / 2)
-                    err, depth_value = depth_list[index].get_value(x, y)
-                    if np.isfinite(depth_value):
-                        print("{} depth at center: {}MM".format(name_list[index], round(depth_value)))
-                    last_ts_list[index] = timestamp_list[index]
-        key = cv2.waitKey(10)
-    cv2.destroyAllWindows()
+    while viewer.is_available(): 
+        while key != 113:  # for 'q' key
+            for index in range(0, len(zed_list)):
+                if zed_list[index].is_opened():
+                    if (timestamp_list[index] > last_ts_list[index]):
+                        viewer.updateData(pointcloud_list[index])
+                        if(viewer.save_data == True):
+                            point_cloud_to_save = sl.Mat()
+                            zed_list[index].retrieve_measure(point_cloud_to_save, sl.MEASURE.XYZRGBA, sl.MEM.CPU)
+                            err = point_cloud_to_save.write('Pointcloud.ply')
+                            if(err == sl.ERROR_CODE.SUCCESS):
+                                print("point cloud saved")
+                            else:
+                                print("the point cloud has not been saved")
+                            viewer.save_data = False
+                        cv2.imshow(name_list[index], left_list[index].get_data())
+                        x = round(depth_list[index].get_width() / 2)
+                        y = round(depth_list[index].get_height() / 2)
+                        err, depth_value = depth_list[index].get_value(x, y)
+                        if np.isfinite(depth_value):
+                            print("{} depth at center: {}MM".format(name_list[index], round(depth_value)))
+                        last_ts_list[index] = timestamp_list[index]
+            key = cv2.waitKey(10)
+        cv2.destroyAllWindows()
+    viewer.exit()
 
     #Stop the threads
     stop_signal = True
