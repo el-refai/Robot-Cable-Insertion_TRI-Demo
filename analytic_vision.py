@@ -63,7 +63,10 @@ def main():
                                  coordinate_system=sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP)
     init.camera_resolution = sl.RESOLUTION.HD720
     init.camera_fps = 30  # The framerate is lowered to avoid any USB3 bandwidth issues
-
+    res = sl.Resolution()
+    res.width = 720
+    res.height = 404
+    
     #List and open cameras
     name_list = []
     last_ts_list = []
@@ -84,10 +87,6 @@ def main():
             print(repr(status))
             zed_list[index].close()
         index = index +1
-
-    res = sl.Resolution()
-    res.width = 720
-    res.height = 404
 
     #Start camera threads
     for index in range(0, len(zed_list)):
