@@ -58,9 +58,11 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
 
     print("Running...")
-    init = sl.InitParameters(depth_mode=sl.DEPTH_MODE.ULTRA,
-                                 coordinate_units=sl.UNIT.METER,
-                                 coordinate_system=sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP)
+    # init = sl.InitParameters(depth_mode=sl.DEPTH_MODE.ULTRA,
+    #                              coordinate_units=sl.UNIT.METER,
+    #                              coordinate_system=sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP)
+    init = sl.InitParameters()
+
     init.camera_resolution = sl.RESOLUTION.HD720
     init.camera_fps = 30  # The framerate is lowered to avoid any USB3 bandwidth issues
     res = sl.Resolution()
