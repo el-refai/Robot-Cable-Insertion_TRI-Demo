@@ -13,6 +13,8 @@ import signal
 import sys
 import ogl_viewer.viewer as gl
 import pyzed.sl as sl
+import matplotlib.pyplot as plt
+import time
 
 zed_list = []
 left_list = []
@@ -97,37 +99,33 @@ def main():
             thread_list[index].start()
 
     camera_model = zed_list[0].get_camera_information().camera_model
-    # Create OpenGL viewer
-    viewer = gl.GLViewer()
-    viewer.init(1, sys.argv, camera_model, res)
+    # # # Create OpenGL viewer
+    # viewer = gl.GLViewer()
+    # viewer.init(1, sys.argv, camera_model, res)
 
+    time.sleep(1.0)
     #Display camera images
     key = ''
-    while viewer.is_available(): 
-        while key != 113:  # for 'q' key
-            for index in range(0, len(zed_list)):
-                if zed_list[index].is_opened():
-                    if (timestamp_list[index] > last_ts_list[index]):
-                        viewer.updateData(pointcloud_list[index])
-                        if(viewer.save_data == True):
-                            point_cloud_to_save = sl.Mat()
-                            zed_list[index].retrieve_measure(point_cloud_to_save, sl.MEASURE.XYZRGBA, sl.MEM.CPU)
-                            err = point_cloud_to_save.write('Pointcloud.ply')
-                            if(err == sl.ERROR_CODE.SUCCESS):
-                                print("point cloud saved")
-                            else:
-                                print("the point cloud has not been saved")
-                            viewer.save_data = False
-                        # cv2.imshow(name_list[index], left_list[index].get_data())
-                        x = round(depth_list[index].get_width() / 2)
-                        y = round(depth_list[index].get_height() / 2)
-                        err, depth_value = depth_list[index].get_value(x, y)
-                        if np.isfinite(depth_value):
-                            print("{} depth at center: {}MM".format(name_list[index], round(depth_value)))
-                        last_ts_list[index] = timestamp_list[index]
-            key = cv2.waitKey(10)
+    for index in range(0, len(zed_list)):
+        if zed_list[index].is_opened():
+            if (timestamp_list[index] > last_ts_list[index]):
+                breakpoint()
+                depth_img = depth_list[index].get_data()
+                # REMINDER : 12.7mm for half an inch!!!!
+                # set values in the image that are nan to 0 so we can display it 
+                depth_img = np.where(np.isnan(depth_img) | np.isinf(depth_img), 0, depth_img)
+                depth_img[np.isnan(depth_img)]=0
+                plt.imshow(depth_img, interpolation='nearest')
+                plt.show()
+                # cv2.imshow(name_list[index], depth_list[index].get_data())
+                x = round(depth_list[index].get_width() / 2)
+                y = round(depth_list[index].get_height() / 2)
+                err, depth_value = depth_list[index].get_value(x, y)
+                if np.isfinite(depth_value):
+                    print("{} depth at center: {}MM".format(name_list[index], round(depth_value)))
+                last_ts_list[index] = timestamp_list[index]
+        key = cv2.waitKey(10)
         # cv2.destroyAllWindows()
-    viewer.exit()
 
     #Stop the threads
     stop_signal = True
