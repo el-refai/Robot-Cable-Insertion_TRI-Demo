@@ -26,6 +26,8 @@
 import sys
 import ogl_viewer.viewer as gl
 import pyzed.sl as sl
+import numpy as np
+import matplotlib.pyplot as plt
 
 def parseArg(argLen, argv, param):
     if(argLen>1):
@@ -63,8 +65,7 @@ def parseArg(argLen, argv, param):
             param.camera_resolution = sl.RESOLUTION.VGA
             print("Using camera in VGA mode")
 
-
-if __name__ == "__main__":
+def get_rgb_get_depth():
     print("Running Depth Sensing sample ... Press 'Esc' to quit\nPress 's' to save the point cloud")
 
     init = sl.InitParameters(depth_mode=sl.DEPTH_MODE.ULTRA,
@@ -72,6 +73,12 @@ if __name__ == "__main__":
                                  coordinate_system=sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP)
     if (len(sys.argv) > 1):
         parseArg(len(sys.argv), sys.argv[1], init)
+    
+    # camera id for the third person one
+    cam_id = 20120598
+    
+    init.set_from_serial_number(cam_id)
+    
     zed = sl.Camera()
     status = zed.open(init)
     if status != sl.ERROR_CODE.SUCCESS:
@@ -84,23 +91,34 @@ if __name__ == "__main__":
 
     camera_model = zed.get_camera_information().camera_model
     # Create OpenGL viewer
-    viewer = gl.GLViewer()
-    viewer.init(1, sys.argv, camera_model, res)
+    # viewer = gl.GLViewer()
+    # viewer.init(1, sys.argv, camera_model, res)
 
     point_cloud = sl.Mat(res.width, res.height, sl.MAT_TYPE.F32_C4, sl.MEM.CPU)
+    depth = sl.Mat()
+    left = sl.Mat()
 
-    while viewer.is_available():
-        if zed.grab() == sl.ERROR_CODE.SUCCESS:
-            zed.retrieve_measure(point_cloud, sl.MEASURE.XYZRGBA,sl.MEM.CPU, res)
-            viewer.updateData(point_cloud)
-            if(viewer.save_data == True):
-                point_cloud_to_save = sl.Mat();
-                zed.retrieve_measure(point_cloud_to_save, sl.MEASURE.XYZRGBA, sl.MEM.CPU)
-                err = point_cloud_to_save.write('Pointcloud.ply')
-                if(err == sl.ERROR_CODE.SUCCESS):
-                    print("point cloud saved")
-                else:
-                    print("the point cloud has not been saved")
-                viewer.save_data = False
-    viewer.exit()
+    while True:
+        if zed.is_opened():
+            if zed.grab() == sl.ERROR_CODE.SUCCESS:
+                zed.retrieve_measure(point_cloud, sl.MEASURE.XYZRGBA,sl.MEM.CPU, res)
+                zed.retrieve_image(left, sl.VIEW.LEFT)
+                zed.retrieve_measure(depth, sl.MEASURE.DEPTH)
+                break
     zed.close()
+
+    depth_img = depth.get_data()
+    # REMINDER : 12.7mm for half an inch!!!!
+    # set values in the image that are nan to 0 so we can display it 
+    depth_img = np.where(np.isnan(depth_img) | np.isinf(depth_img), 0, depth_img)
+    depth_img[np.isnan(depth_img)]=0
+    plt.imshow(depth_img, interpolation='nearest')
+    plt.show()
+
+    rgb_img = left.get_data()
+    plt.imshow(rgb_img)
+    plt.show()
+    return depth_img, rgb_img
+
+if __name__ == "__main__":
+    get_rgb_get_depth()
