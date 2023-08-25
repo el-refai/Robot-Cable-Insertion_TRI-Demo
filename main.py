@@ -29,14 +29,92 @@ num_iterations = 0
 
 while True:
     depth_image, rgb_image = get_rgb_get_depth()
+    print("depth image shape: ", depth_image.shape)
+    print("rgb image shape: ", rgb_image.shape)
     g = GraspSegmenter(depth_image, rgb_image)
-    plt.imshow(rgb_image, interpolation="nearest")
-    plt.show()
-    three_mat_color = rgb_image
-    three_mat_depth = depth_image
 
+    # display results
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 4),
+                            sharex=True, sharey=True)
+
+    ax = axes.ravel()
+
+    ax[0].imshow(depth_image, interpolation='nearest')
+    ax[0].axis('off')
+    ax[0].set_title('depth_image', fontsize=20)
+
+    ax[1].imshow(rgb_image)
+    ax[1].axis('off')
+    ax[1].set_title('rgb_image', fontsize=20)
+
+    fig.tight_layout()
+    plt.show()
+
+    three_mat_color = rgb_image
+    # mult by 1e2 for more precision or something
+    three_mat_depth = depth_image*100.0
+
+    #  mask of zeros to remove part of the workspace that isnt the table
+    left_cutoff = 248
+    right_cutoff = 1130
+    bottom_cutoff = 420
+    left_mask = np.zeros((bottom_cutoff, left_cutoff))
+    right_mask = np.zeros((bottom_cutoff, len(three_mat_depth[0])-right_cutoff))
+    bottom_mask = np.zeros((len(three_mat_depth)-bottom_cutoff, len(three_mat_depth[0])))
+    center_mask = np.ones((bottom_cutoff, right_cutoff-left_cutoff))
+    full_mask = np.hstack((left_mask, center_mask, right_mask))
+    full_mask = np.vstack((full_mask, bottom_mask))
+
+    three_mat_depth = np.multiply(three_mat_depth, full_mask)
+
+
+
+    print("depth in channel is: ", three_mat_depth[185][555])
+    print("depth on channel is: ", three_mat_depth[170][563])
+    print("depth on cable is: ", three_mat_depth[120][627])
+    print("depth on cable is: ", three_mat_depth[134][626])
+    print("depth on 1.5in block is :", three_mat_depth[349][703])
+
+
+
+
+
+    print("three_mat_depth: ", three_mat_depth)
+    plt.scatter(x=[555, 563, 627, 626,703], y=[185, 170, 120, 134,349], c='r')
+    plt.title("three_mat_depth")
+    plt.imshow(three_mat_depth, interpolation="nearest")
+    plt.show()
+
+    # highests depth mask: 
+    highest_depth = np.max(three_mat_depth)
+    mask = (np.ones(three_mat_depth.shape)*highest_depth) - three_mat_depth
+    plt.title("flattened with height mask")
+    plt.imshow(mask, interpolation='nearest')
+    plt.show()
+
+
+    # want lowest 5% of depth pixels
+    # structure is [[y_0, x_0], [y_1, x_1] ...]
+    N = 0.05*len(three_mat_depth[0])*len(three_mat_depth)
+    n_lowest_pts = get_N_lowest_pts(three_mat_depth, N)
+    # use ransac to fit a plane for the table
+    n_lowest_depth_vals = [three_mat_depth[r][c] for r,c in n_lowest_pts]
+    ransac = get_fit_plane_ransac(n_lowest_pts, n_lowest_depth_vals)
+
+    ransac_flattened_img = np.zeros(three_mat_depth.shape)
+    for r in len(three_mat_depth):
+        for c in len(three_mat_depth[0]):
+            ransac_flattened_img[r][c] = three_mat_depth[r][c] - ransac.predict((r,c)) 
+    plt.title("ransac flattened img")
+    plt.imshow(ransac_flattened_img, interpolation='nearest')
+    plt.show()
+
+
+
+    # ----------------------FIND EDGES
     edges_pre = np.uint8(three_mat_depth*10)
     edges = cv2.Canny(edges_pre,10,20)
+    plt.title("edges")
     plt.imshow(edges)
     plt.show()
 
@@ -47,51 +125,60 @@ while True:
     max_edges = 0
     candidate_channel_pts = []
     
-    # guess for what 0.5in is in terms of depth
-    depth_diff_goal = 0.016
+    # guess for what 0.5in is in terms of depth i.e. 1.27cm
+    depth_diff_goal = 0.4
     # threshold to allow for error
-    depth_threshold = 0.002
-
+    depth_threshold = 0.3
+    lower = depth_diff_goal-depth_threshold
+    upper = depth_diff_goal+depth_threshold
+    # max allowable difference in heigh we consider is 3cm (1.18in) to account for 0 values
+    max_diff = 5.0
     for r in range(len(edges)):
-            for c in range(len(edges[r])):
-                if (lower < edges[r][c]< upper):
-                    diff1 = 0
-                    diff2 = 0
-                    diff3 = 0
-                    diff4 = 0
-                    for add in range(1, 4):
-                        if (r-add < 0 or c-add < 0) or (r+add >= len(three_mat_depth) or c+add >= len(three_mat_depth[r])):
-                            break
-                        # top - bottom
-                        diff1 = abs(three_mat_depth[r-add][c] - three_mat_depth[r+add][c]) 
-                        # left - right
-                        diff2 = abs(three_mat_depth[r][c-add] - three_mat_depth[r][c+add])
-                        # top left - bottom right
-                        diff3 = abs(three_mat_depth[r-add][c-add] - three_mat_depth[r+add][r+add])
-                        # top right - bottom left
-                        diff4 = abs(three_mat_depth[r-add][c+add] - three_mat_depth[r+add][r-add])
+        for c in range(len(edges[r])):
+            if (edges[r][c] == 255):
+                diff1 = 0
+                diff2 = 0
+                diff3 = 0
+                diff4 = 0
+                for add in range(1, 4):
+                    if (r-add < 0 or c-add < 0) or (r+add >= len(three_mat_depth) or c+add >= len(three_mat_depth[r])):
+                        break
+                    minus_zero = three_mat_depth[r-add][c]
+                    plus_zero = three_mat_depth[r+add][c]
+                    zero_minus = three_mat_depth[r][c-add]
+                    zero_plus = three_mat_depth[r][c+add]
 
-                        if diff1 > 0.03 or diff2 > 0.03 or diff3 > 0.03 or diff4 > 0.03:
-                            continue
-                        if 0.01 <= np.mean(np.array([diff1, diff2, diff3, diff4])) <= 0.014:
-                            candidate_channel_pts += [(r,c)]
 
-                        # if 0.01 < diff1 < 0.014 or 0.01 < diff2 < 0.014 or 0.01 < diff3 < 0.014 or 0.01 < diff4 < 0.014:
-                        #     candidate_channel_pts += [(r,c)]     
-                    # throw away values that we know differ by too much, this is cause if you take the avg of diffs 
-                    # if diff1 > 0.02:
-                    #     diff1 = 0
-                    # if diff2 > 0.02:
-                    #     diff2 = 0
-                    # if diff3 > 0.02:
-                    #     diff3 = 0
-                    # if diff4 > 0.02:
-                    #     diff4 = 0 
-                    if diff1 > 0.02 or diff2 > 0.02 or diff3 > 0.02 or diff4 > 0.02:
+                    # top - bottom
+                    diff1 = abs(three_mat_depth[r-add][c] - three_mat_depth[r+add][c]) 
+                    # left - rights
+                    diff2 = abs(three_mat_depth[r][c-add] - three_mat_depth[r][c+add])
+                    # top left - bottom right
+                    diff3 = abs(three_mat_depth[r-add][c-add] - three_mat_depth[r+add][r+add])
+                    # top right - bottom left
+                    diff4 = abs(three_mat_depth[r-add][c+add] - three_mat_depth[r+add][r-add])
+
+                    if diff1 > max_diff or diff2 > max_diff or diff3 > max_diff or diff4 > max_diff:
                         continue
-                    if 0.01 <= np.mean(np.array([diff1, diff2, diff3, diff4])) <= 0.014:
+                    if lower <= np.mean(np.array([diff1, diff2, diff3, diff4])) <= upper:
                         candidate_channel_pts += [(r,c)]
-                        #print("the detected avg was: ", np.mean(np.array([diff1, diff2, diff3, diff4])))
+
+                    # if 0.01 < diff1 < 0.014 or 0.01 < diff2 < 0.014 or 0.01 < diff3 < 0.014 or 0.01 < diff4 < 0.014:
+                    #     candidate_channel_pts += [(r,c)]     
+                # throw away values that we know differ by too much, this is cause if you take the avg of diffs 
+                # if diff1 > 0.02:
+                #     diff1 = 0
+                # if diff2 > 0.02:
+                #     diff2 = 0
+                # if diff3 > 0.02:
+                #     diff3 = 0
+                # if diff4 > 0.02:
+                #     diff4 = 0 
+                if diff1 > max_diff or diff2 > max_diff or diff3 > max_diff or diff4 > max_diff:
+                    continue
+                if lower <= np.mean(np.array([diff1, diff2, diff3, diff4])) <= upper:
+                    candidate_channel_pts += [(r,c)]
+                    #print("the detected avg was: ", np.mean(np.array([diff1, diff2, diff3, diff4])))
     print("Candidate Edge pts: ", candidate_channel_pts)
     # need to figure out which edge point is in fact the best one for our channel
     # i.e. highest up, and pick a point that is actually in the channel
@@ -105,16 +192,16 @@ while True:
     print("the edge with deepest depth is: ", three_mat_depth[possible_cable_edge_pt[0]][possible_cable_edge_pt[1]])
 
     for candidate_pt in candidate_channel_pts:
-            r = candidate_pt[0]
-            c = candidate_pt[1]
-            print("r", r, "c", c, "my depth is: ", three_mat_depth[r][c])
-            if 0 < three_mat_depth[r][c] < max_depth:
-                print("max depth:", max_depth)
-                channel_edge_pt = (r,c)
-                max_depth = three_mat_depth[r][c]
-            if three_mat_depth[r][c] > min_depth:
-                possible_cable_edge_pt = (r,c)
-                min_depth = three_mat_depth[r][c]
+        r = candidate_pt[0]
+        c = candidate_pt[1]
+        print("r", r, "c", c, "my depth is: ", three_mat_depth[r][c])
+        if 0 < three_mat_depth[r][c] < max_depth:
+            print("max depth:", max_depth)
+            channel_edge_pt = (r,c)
+            max_depth = three_mat_depth[r][c]
+        if three_mat_depth[r][c] > min_depth:
+            possible_cable_edge_pt = (r,c)
+            min_depth = three_mat_depth[r][c]
     print("The edge of the channel is: ", channel_edge_pt)
     r,c = channel_edge_pt
     possible_channel_pts = []
@@ -127,20 +214,20 @@ while True:
         if three_mat_depth[r][c] == 0.0:
             index += 1
             continue
-        for add in range(1, 4):
+        for add in range(1, 6):
             if (r-add < 0 or c-add < 0) or (r+add >= len(three_mat_depth) or c+add >= len(three_mat_depth[r])):
                 break
             # left - right
             diff1 = abs(three_mat_depth[r-add][c] - three_mat_depth[r+add][c])
             diff2 = abs(three_mat_depth[r][c-add] - three_mat_depth[r][c+add])
-            if 0.01 <= diff1 < 0.014: # prev upper was 0.016
+            if lower <= diff1 < upper: # prev upper was 0.016
                 if three_mat_depth[r-add][c] > three_mat_depth[r+add][c]:
                     channel_start = (r-add, c)
                     possible_channel_pts += [(r-add, c)]
                 else:
                     channel_start = (r+add, c)
                     possible_channel_pts += [(r+add, c)]
-            if 0.01 <= diff2 < 0.014: #prev upper was 0.016
+            if lower <= diff2 < upper: #prev upper was 0.016
                 if three_mat_depth[r][c-add] > three_mat_depth[r][c+add]:
                     channel_start = (r, c-add)
                     possible_channel_pts += [(r, c-add)]
@@ -176,13 +263,13 @@ while True:
             # left - right
             diff1 = abs(three_mat_depth[r-add][c] - three_mat_depth[r+add][c])
             diff2 = abs(three_mat_depth[r][c-add] - three_mat_depth[r][c+add])
-            if 0.01 <= diff1 < 0.020: # prev upper was 0.016
+            if lower <= diff1 < upper: # prev upper was 0.016
                 # the depth that is lower (i.e. point is closer to the camera is the point that is actually on the cable)
                 if three_mat_depth[r-add][c] > three_mat_depth[r+add][c]:
                     cable_pt = (r+add, c)
                 else:
                     cable_pt = (r-add,c)
-            if 0.01 <= diff2 < 0.020: #prev upper was 0.016
+            if lower <= diff2 < upper: #prev upper was 0.016
                 if three_mat_depth[r][c-add] > three_mat_depth[r][c+add]:
                     cable_pt = (r,c+add)
                 else:
@@ -194,9 +281,11 @@ while True:
     loc = (cable_pt[1], cable_pt[0])
     max_scoring_loc = loc
     print("the cable point is ", cable_pt)
+    print("the cable point depth is ", three_mat_depth[cable_pt[0]][cable_pt[1]])
 
 
     plt.imshow(edges, cmap='gray')
+    plt.title("candidate points and cable and channel start")
     plt.scatter(x = [j[1] for j in candidate_channel_pts], y=[i[0] for i in candidate_channel_pts],c='r')
     plt.scatter(x=channel_edge_pt[1], y=channel_edge_pt[0], c='b')
     plt.scatter(x=channel_start[1], y=channel_start[0], c='m')
@@ -208,6 +297,7 @@ while True:
     print("Starting segment_cable pt: "+str(max_scoring_loc))
     # ----------------------Segment
     rope_cloud, _, cable_waypoints, weird_pts = g.segment_cable(loc)
+    print("ropes cloud: ", rope_cloud)
     # ----------------------
 
 
@@ -348,7 +438,7 @@ while True:
     # want 5 total waypoints for entire task
     num_waypoints = 5 - num_iterations
 
-    
+
     
     
     # Use estimation

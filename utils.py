@@ -16,11 +16,43 @@ from skimage import data
 from skimage.util import invert
 from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import curve_fit
+from sklearn.linear_model import RANSACRegressor
+
+def get_N_lowest_pts(img, N):
+    flattened_img = img.flatten()
+    n_lowest_pts_idx = np.argpartition(flattened_img, N)[:N]
+    # since the indices are flattened we need to convert back to 2D coords
+    n_lowest_pts_coords = np.unravel_index(n_lowest_pts_idx, img.shape())
+    n_lowest_pts = zip(n_lowest_pts_coords[0], n_lowest_pts_coords[1])
+    # pretty sure first list is our y-coords and second list is our x-coords
+    plt.title("n lowest points")
+    plt.scatter(x=n_lowest_pts_coords[1], y=n_lowest_pts_coords[0])
+    plt.imshow(img)
+    plt.show()
+    return n_lowest_pts
+
+def get_fit_plane_ransac(points, depth_vals):
+    # Assuming you have a 3D point cloud stored in a numpy array called 'points'
+    X = points[:, :2]  # Extracting the x and y coordinates
+    Z = points[:, 2]   # Extracting the z coordinate
+
+    # Fitting a plane using RANSAC
+    ransac = RANSACRegressor()
+    ransac.fit(X, Z)
+
+    # Accessing the fitted plane parameters
+    A = ransac.estimator_.coef_[0]
+    B = ransac.estimator_.coef_[1]
+    C = -1
+    D = ransac.estimator_.intercept_
+
+    # solving the equation: {A}x + {B}y + {C}z + {D} = 0 for z
+    return ransac
 
 def waypoints_dfs(skeleton, ):
     NEIGHS = [(-1, 0), (1, 0), (0, 1), (0, -1), (-1,-1), (-1,1), (1,-1),(1,1)]
 def generate_waypoints_relative(skeleton, start_pt, pixels_per_waypoint):
-
+    return
 
 def generate_waypoints_naive(skeleton, skeleton_len, start_pt, num_waypoints):
     # POSSIBLE BUG: skeleton_len may also inclue the strands of the skeleton, need to check!!!
@@ -32,7 +64,10 @@ def generate_waypoints_naive(skeleton, skeleton_len, start_pt, num_waypoints):
 def skeletonize_img(img):
     # Invert the horse image
     
-    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    # gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+
+    # since we are currently using a binary mask we need to mult by 255 to get it in grayscale
+    gray = img*255
 
     # threshold
     image = cv2.threshold(gray,30,1,cv2.THRESH_BINARY)[1]
@@ -170,9 +205,11 @@ def find_length_and_endpoints(skeleton_img):
 class GraspSegmenter:
 
     #  zed camera gives us rgb and depth separately so we just save them differently
-    def __init__(self, rgb_image, depth_image):
+    def __init__(self, depth_image, rgb_image):
         self.color = rgb_image
         self.depth = depth_image
+        print("self.color is", self.color.shape)
+        print("self.depth is", self.depth.shape)
 
     def segment_cable(self, loc, orient_mode=False):
         '''
@@ -191,7 +228,7 @@ class GraspSegmenter:
         start_color = self.color[loc[1]][loc[0]]
         RADIUS2 = 1  # distance from original point before termination
         CLOSE2 = .002**2
-        DELTA = .00080#.00075
+        DELTA = 0.01#.00080#.00075
         NEIGHS = [(-1, 0), (1, 0), (0, 1), (0, -1)]
         COLOR_THRESHOLD = 45
         counter = 0
@@ -210,10 +247,11 @@ class GraspSegmenter:
             next_color = next_color.astype(np.int16)
             visited.add(next_loc)
             diff = start_point-next_point
-            dist = diff.dot(diff)
+            # print("diff is", diff)
+            dist = diff #diff.dot(diff)
             if (dist > RADIUS2):
                 continue
-            pts.append(next_point)
+            pts.append(next_loc)
             # has us updating the list of points to our waypoint
             if counter % 1000 == 0:
                 waypoints.append((next_loc[1],next_loc[0]))
@@ -223,14 +261,15 @@ class GraspSegmenter:
             # add neighbors if they're within delta of current height
             for n in NEIGHS:
                 test_loc = (next_loc[0]+n[0], next_loc[1]+n[1])
-                if test_loc[0] >= self.depth.width or test_loc[0] < 0 \
-                        or test_loc[1] >= self.depth.height or test_loc[1] < 0:
+                # NOT SURE IF len(self.depth[0]) is EQUIVALENT TO self.depth.width!!!!!
+                if test_loc[0] >= len(self.depth[0]) or test_loc[0] < 0 \
+                        or test_loc[1] >= len(self.depth) or test_loc[1] < 0:
                     continue
                 if (test_loc in visited):
                     continue
                 # want to check if the points were adding are of similar color cause the cable is a uniform color
                 # the channel currently is not the same color so this is another method to differentiate between them
-                test_pt = self.ij_to_point(test_loc).data
+                test_pt = self.depth[test_loc[1]][test_loc[0]]
                 # this is cause the data is grayscaled so we can just look at the Red channel 
                 test_color = np.asarray(self.color[test_loc[1]][test_loc[0]])
                 # pdb.set_trace()
@@ -238,7 +277,8 @@ class GraspSegmenter:
                 color_diff = np.linalg.norm(next_color-test_color)
                 if (20 < color_diff < 45):
                     weird_pts.append([test_loc[1], test_loc[0]])
-                if (abs(test_pt[2]-next_point[2]) < DELTA and color_diff < COLOR_THRESHOLD):
+                # print("the delta is", abs(test_pt
+                if (abs(test_pt-next_point) < DELTA): #and color_diff < COLOR_THRESHOLD):
                     q.append(test_loc)
 
         return np.array(pts), np.array(closepts), waypoints, weird_pts
@@ -256,7 +296,7 @@ class GraspSegmenter:
         start_point = self.depth[loc[1]][loc[0]]
         RADIUS2 = 1  # distance from original point before termination
         CLOSE2 = .002**2
-        DELTA = 0.0002*3
+        DELTA = 0.01 #0.0002*3
         NEIGHS = [(-1, 0), (1, 0), (0, 1), (0, -1)]
         counter = 0
         waypoints = []
@@ -268,7 +308,7 @@ class GraspSegmenter:
             # Next Point Example: [0.33499247 0.00217638 0.05645943]
             visited.add(next_loc)
             diff = start_point-next_point
-            dist = diff.dot(diff)
+            dist = diff #diff.dot(diff)
             if (dist > RADIUS2):
                 continue
             pts_pixels.append(next_loc)
@@ -284,15 +324,16 @@ class GraspSegmenter:
                 test_loc = (next_loc[0]+n[0], next_loc[1]+n[1])
                 if (test_loc in visited):
                     continue
-                if test_loc[0] >= self.depth.width or test_loc[0] < 0 \
-                        or test_loc[1] >= self.depth.height or test_loc[1] < 0:
+                # 
+                if test_loc[0] >= len(self.depth[0]) or test_loc[0] < 0 \
+                        or test_loc[1] >= len(self.depth) or test_loc[1] < 0:
                     continue
-                test_pt = self.ij_to_point(test_loc).data
-                if (abs(test_pt[2]-next_point[2]) < DELTA):
+                test_pt = self.depth[test_loc[1]][test_loc[0]]
+                if (abs(test_pt-next_point) < DELTA):
                     q.append(test_loc)
         if (use_pixel == False):
             # NOT SURE WHETHER OT TRANSPOSE OR NOT
-            return np.array(pts), np.array(closepts), waypoints, endpoints
+            return np.array(pts).T, np.array(closepts).T, waypoints, endpoints
         else:
-            return pts_pixels, np.array(pts), np.array(closepts), waypoints, endpoints
+            return pts_pixels, np.array(pts).T, np.array(closepts).T, waypoints, endpoints
   

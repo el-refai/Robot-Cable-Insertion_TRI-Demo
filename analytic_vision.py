@@ -64,6 +64,7 @@ def main():
     #                              coordinate_units=sl.UNIT.METER,
     #                              coordinate_system=sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP)
     init = sl.InitParameters()
+    init.set_from_serial_number(20120598)
 
     init.camera_resolution = sl.RESOLUTION.HD720
     init.camera_fps = 30  # The framerate is lowered to avoid any USB3 bandwidth issues

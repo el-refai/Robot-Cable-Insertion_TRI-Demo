@@ -572,6 +572,7 @@ try:
 
         # ----------------------Find brightest pixel for segment_cable
         if DISPLAY:
+            plt.title("rgb_image")
             plt.imshow(rgb_image, interpolation="nearest")
             plt.show()
         three_mat_color = rgb_image
@@ -836,7 +837,7 @@ try:
 
         ax = axes.ravel()
         plt.scatter(x = [j[1] for j in weird_pts], y=[i[0] for i in weird_pts],c='w')
-        plt.scatter(x = [j[1] for j in rope_cloud], y=[i[0] for i in rope_cloud],c='r')
+        plt.scatter(x=[j[1] for j in rope_cloud], y=[j[0] for j in rope_cloud], c='r')
         ax[0].imshow(three_mat_color, cmap=plt.cm.gray)
         ax[0].axis('off')
         ax[0].set_title('color', fontsize=20)

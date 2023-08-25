@@ -74,8 +74,9 @@ def get_rgb_get_depth():
     if (len(sys.argv) > 1):
         parseArg(len(sys.argv), sys.argv[1], init)
     
-    # camera id for the third person one
-    cam_id = 20120598
+    
+    cam_id = 20120598 # cam id for the overhead
+    # cam_id = 22008760 # cam id for the left camera
     
     init.set_from_serial_number(cam_id)
     
@@ -90,6 +91,10 @@ def get_rgb_get_depth():
     res.height = 404
 
     camera_model = zed.get_camera_information().camera_model
+    point_cloud = sl.Mat(res.width, res.height, sl.MAT_TYPE.F32_C4, sl.MEM.CPU)
+    if zed.grab() == sl.ERROR_CODE.SUCCESS:
+        zed.retrieve_measure(point_cloud, sl.MEASURE.XYZRGBA,sl.MEM.CPU, res)
+        # breakpoint()
     # Create OpenGL viewer
     # viewer = gl.GLViewer()
     # viewer.init(1, sys.argv, camera_model, res)
@@ -114,10 +119,34 @@ def get_rgb_get_depth():
     depth_img[np.isnan(depth_img)]=0
     plt.imshow(depth_img, interpolation='nearest')
     plt.show()
+    print("depth img shape: ", depth_img.shape)
 
     rgb_img = left.get_data()
-    plt.imshow(rgb_img)
+    # plt.imshow(rgb_img)
+    # plt.show()
+
+
+    # display results
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 4),
+                            sharex=True, sharey=True)
+
+    ax = axes.ravel()
+
+    ax[0].imshow(depth_img, interpolation='nearest')
+    ax[0].axis('off')
+    ax[0].set_title('depth_img', fontsize=20)
+
+    ax[1].imshow(rgb_img)
+    ax[1].axis('off')
+    ax[1].set_title('rgb_img', fontsize=20)
+
+    fig.tight_layout()
     plt.show()
+
+
+    # print("rgb img shape: ", rgb_img.shape)
+    print("depth img type: ", depth_img.dtype)
+
     return depth_img, rgb_img
 
 if __name__ == "__main__":

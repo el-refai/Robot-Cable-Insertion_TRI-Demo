@@ -86,7 +86,7 @@ if __name__ == "__main__":
         point_cloud = sl.Mat(res.width, res.height, sl.MAT_TYPE.F32_C4, sl.MEM.CPU)
 
         cameras.append((zed, point_cloud))
-
+    # breakpoint()
     # Create a single OpenGL viewer to display all point clouds
     viewer = gl.GLViewer()
     viewer.init(1, sys.argv, camera_model, res)
@@ -98,8 +98,8 @@ if __name__ == "__main__":
 
         # Combine and render all point clouds in the same OpenGL window
         combined_point_cloud = sl.Mat(res.width, res.height, sl.MAT_TYPE.F32_C4, sl.MEM.CPU)
-        for _, point_cloud in cameras:
-            combined_point_cloud += point_cloud
+        # for _, point_cloud in cameras:
+        #     combined_point_cloud += point_cloud
 
         viewer.updateData(combined_point_cloud)
 
