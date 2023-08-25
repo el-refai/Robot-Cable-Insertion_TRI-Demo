@@ -1,14 +1,14 @@
 import cv2
 from scipy.ndimage.filters import gaussian_filter
 from scipy.optimize import curve_fit
-from grasp import Grasp, GraspSelector
+# from grasp import Grasp, GraspSelector
 from autolab_core import RigidTransform, RgbdImage, DepthImage, ColorImage, CameraIntrinsics, Point, PointCloud
 import numpy as np
 import math
 import copy
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-from rotate import rotate_from_pointcloud, rotate
+# from rotate import rotate_from_pointcloud, rotate
 import time
 import os
 import sys
@@ -836,7 +836,8 @@ try:
 
         ax = axes.ravel()
         plt.scatter(x = [j[1] for j in weird_pts], y=[i[0] for i in weird_pts],c='w')
-        ax[0].imshow(img.color.data, cmap=plt.cm.gray)
+        plt.scatter(x = [j[1] for j in rope_cloud], y=[i[0] for i in rope_cloud],c='r')
+        ax[0].imshow(three_mat_color, cmap=plt.cm.gray)
         ax[0].axis('off')
         ax[0].set_title('color', fontsize=20)
 
@@ -848,28 +849,38 @@ try:
         plt.show()
 
 
-        new_transf = iface.T_PHOXI_BASE.inverse()
-        transformed_rope_cloud = new_transf.apply(rope_cloud)
-        di = iface.cam.intrinsics.project_to_image(
-            transformed_rope_cloud, round_px=False)
-        if DISPLAY:
-            plt.imshow(di._image_data(), interpolation="nearest")
-            plt.show()
+        # new_transf = iface.T_PHOXI_BASE.inverse()
+        # transformed_rope_cloud = new_transf.apply(rope_cloud)
+        # di = iface.cam.intrinsics.project_to_image(
+        #     transformed_rope_cloud, round_px=False)
+        # if DISPLAY:
+        #     plt.imshow(di._image_data(), interpolation="nearest")
+        #     plt.show()
         
-        make_bounding_boxes(di._image_data())
-        cable_skeleton = skeletonize_img(di._image_data())
+        # make_bounding_boxes(di._image_data())
+
+
+        blank = np.zeros((len(three_mat_depth[0]), len(three_mat_depth)))
+        # for every point in the ropecloud we set it to 1 so we have our cable segment
+        for r,c in rope_cloud:
+            blank[r][c] = 1
+        cable_segment_mask = blank
+        plt.title("cable_segment")
+        plt.imshow(cable_segment_mask)
+        plt.show()
+        cable_skeleton = skeletonize_img(cable_segment_mask)
         
         cable_len, cable_endpoints_1 = find_length_and_endpoints(cable_skeleton)
         
-        ### MODIFIED BY KARIM AFTER COMMENTING OUT CORY"S CODE
-        delete_later = []
-        ### MODIFIED BY KARIM AFTER COMMENTING OUT CORY"S CODE
+        # ### MODIFIED BY KARIM AFTER COMMENTING OUT CORY"S CODE
+        # delete_later = []
+        # ### MODIFIED BY KARIM AFTER COMMENTING OUT CORY"S CODE
 
-        di_data = di._image_data()
-        for delete in delete_later:
-            di_data[delete[1]][delete[0]] = [float(0), float(0), float(0)]
+        # di_data = di._image_data()
+        # for delete in delete_later:
+        #     di_data[delete[1]][delete[0]] = [float(0), float(0), float(0)]
 
-        mask = np.zeros((len(di_data), len(di_data[0])))
+        # mask = np.zeros((len(di_data), len(di_data[0])))
         loc_list = [loc]
 
         # modified segment_cable code to build a mask for the cable
@@ -880,173 +891,173 @@ try:
         # if yes set it's x,y position to the mask matrix with the value 1
         # add that value to the visited list so that we don't go back to it again
 
-        new_di_data = np.zeros((len(di_data), len(di_data[0])))
-        xdata = []
-        ydata = []
+        # new_di_data = np.zeros((len(di_data), len(di_data[0])))
+        # xdata = []
+        # ydata = []
 
-        for r in range(len(new_di_data)):
-            for c in range(len(new_di_data[r])):
-                new_di_data[r][c] = di_data[r][c][0]
-                if (new_di_data[r][c] > 0):
-                    xdata += [c]
-                    ydata += [r]
+        # for r in range(len(new_di_data)):
+        #     for c in range(len(new_di_data[r])):
+        #         new_di_data[r][c] = di_data[r][c][0]
+        #         if (new_di_data[r][c] > 0):
+        #             xdata += [c]
+        #             ydata += [r]
 
-        for r in range(len(new_di_data)):
-            for c in range(len(new_di_data[r])):
-                if (new_di_data[r][c] != 0):
-                    curr_edges = 0
-                    for add in range(1, 8):
-                        if (new_di_data[min(len(new_di_data)-add, r+add)][c] != 0):
-                            curr_edges += 1
-                        if (new_di_data[max(0, r-add)][c] != 0):
-                            curr_edges += 1
-                        if (new_di_data[r][min(len(new_di_data[0])-add, c+add)] != 0):
-                            curr_edges += 1
-                        if (new_di_data[r][max(0, c-add)] != 0):
-                            curr_edges += 1
-                        if (new_di_data[min(len(new_di_data)-add, r+add)][min(len(new_di_data[0])-add, c+add)] != 0):
-                            curr_edges += 1
-                        if (new_di_data[min(len(new_di_data)-add, r+add)][max(0, c-add)] != 0):
-                            curr_edges += 1
-                        if (new_di_data[max(0, r-add)][min(len(new_di_data[0])-add, c+add)] != 0):
-                            curr_edges += 1
-                        if (new_di_data[max(0, r-add)][max(0, c-add)] != 0):
-                            curr_edges += 1
-                    if (curr_edges < 11):
-                        new_di_data[r][c] = 0.0
+        # for r in range(len(new_di_data)):
+        #     for c in range(len(new_di_data[r])):
+        #         if (new_di_data[r][c] != 0):
+        #             curr_edges = 0
+        #             for add in range(1, 8):
+        #                 if (new_di_data[min(len(new_di_data)-add, r+add)][c] != 0):
+        #                     curr_edges += 1
+        #                 if (new_di_data[max(0, r-add)][c] != 0):
+        #                     curr_edges += 1
+        #                 if (new_di_data[r][min(len(new_di_data[0])-add, c+add)] != 0):
+        #                     curr_edges += 1
+        #                 if (new_di_data[r][max(0, c-add)] != 0):
+        #                     curr_edges += 1
+        #                 if (new_di_data[min(len(new_di_data)-add, r+add)][min(len(new_di_data[0])-add, c+add)] != 0):
+        #                     curr_edges += 1
+        #                 if (new_di_data[min(len(new_di_data)-add, r+add)][max(0, c-add)] != 0):
+        #                     curr_edges += 1
+        #                 if (new_di_data[max(0, r-add)][min(len(new_di_data[0])-add, c+add)] != 0):
+        #                     curr_edges += 1
+        #                 if (new_di_data[max(0, r-add)][max(0, c-add)] != 0):
+        #                     curr_edges += 1
+        #             if (curr_edges < 11):
+        #                 new_di_data[r][c] = 0.0
 
-        new_di = DepthImage(new_di_data.astype(np.float32), frame=di.frame)
-        if DISPLAY:
-            plt.imshow(new_di._image_data(), interpolation="nearest")
-            plt.show()
+        # new_di = DepthImage(new_di_data.astype(np.float32), frame=di.frame)
+        # if DISPLAY:
+        #     plt.imshow(new_di._image_data(), interpolation="nearest")
+        #     plt.show()
 
-        new_di_data = gaussian_filter(new_di_data, sigma=1)
+        # new_di_data = gaussian_filter(new_di_data, sigma=1)
 
-        for r in range(len(new_di_data)):
-            for c in range(len(new_di_data[r])):
-                if (new_di_data[r][c] != 0):
-                    new_di_data[r][c] = 255
-        new_di_data = gaussian_filter(new_di_data, sigma=1)
+        # for r in range(len(new_di_data)):
+        #     for c in range(len(new_di_data[r])):
+        #         if (new_di_data[r][c] != 0):
+        #             new_di_data[r][c] = 255
+        # new_di_data = gaussian_filter(new_di_data, sigma=1)
 
-        for r in range(len(new_di_data)):
-            for c in range(len(new_di_data[r])):
-                if (new_di_data[r][c] != 0):
-                    new_di_data[r][c] = 255
-        new_di_data = gaussian_filter(new_di_data, sigma=1)
+        # for r in range(len(new_di_data)):
+        #     for c in range(len(new_di_data[r])):
+        #         if (new_di_data[r][c] != 0):
+        #             new_di_data[r][c] = 255
+        # new_di_data = gaussian_filter(new_di_data, sigma=1)
 
-        save_loc = (0, 0)
-        for r in range(len(new_di_data)):
-            for c in range(len(new_di_data[r])):
-                if (new_di_data[r][c] != 0):
-                    new_di_data[r][c] = 255
-                    save_loc = (c, r)
-        new_di_data = gaussian_filter(new_di_data, sigma=1)
+        # save_loc = (0, 0)
+        # for r in range(len(new_di_data)):
+        #     for c in range(len(new_di_data[r])):
+        #         if (new_di_data[r][c] != 0):
+        #             new_di_data[r][c] = 255
+        #             save_loc = (c, r)
+        # new_di_data = gaussian_filter(new_di_data, sigma=1)
 
-        compress_factor = 30
-        rows_comp = int(math.floor(len(di_data)/compress_factor))
-        cols_comp = int(math.floor(len(di_data[0])/compress_factor))
-        compressed_map = np.zeros((rows_comp, cols_comp))
+        # compress_factor = 30
+        # rows_comp = int(math.floor(len(di_data)/compress_factor))
+        # cols_comp = int(math.floor(len(di_data[0])/compress_factor))
+        # compressed_map = np.zeros((rows_comp, cols_comp))
 
-        for r in range(rows_comp):
-            if r != 0:
-                r = float(r) - 0.5
-            for c in range(cols_comp):
-                if c != 0:
-                    c = float(c) - 0.5
-                for add in range(1, 5):
-                    if (new_di_data[int(min(len(new_di_data)-add, r*compress_factor+add))][int(c*compress_factor)] != 0):
-                        compressed_map[int(r)][int(c)] = 255
-                        break
-                    if (new_di_data[int(max(0, r*compress_factor-add))][int(c*compress_factor)] != 0):
-                        compressed_map[int(r)][int(c)] = 255
-                        break
-                    if (new_di_data[int(r*compress_factor)][int(min(len(new_di_data[0])-add, c*compress_factor+add))] != 0):
-                        compressed_map[int(r)][int(c)] = 255
-                        break
-                    if (new_di_data[int(r*compress_factor)][int(max(0, c*compress_factor-add))] != 0):
-                        compressed_map[int(r)][int(c)] = 255
-                        break
-                    if (new_di_data[int(min(len(new_di_data)-add, r*compress_factor+add))][int(min(len(new_di_data[0])-add, c*compress_factor+add))] != 0):
-                        compressed_map[int(r)][int(c)] = 255
-                        break
-                    if (new_di_data[int(min(len(new_di_data)-add, r*compress_factor+add))][int(max(0, c*compress_factor-add))] != 0):
-                        compressed_map[int(r)][int(c)] = 255
-                        break
-                    if (new_di_data[int(max(0, r*compress_factor-add))][int(min(len(new_di_data[0])-add, c*compress_factor+add))] != 0):
-                        compressed_map[int(r)][int(c)] = 255
-                        break
-                    if (new_di_data[int(max(0, r*compress_factor-add))][int(max(0, c*compress_factor-add))] != 0):
-                        compressed_map[int(r)][int(c)] = 255
-                        break
-        max_edges = 0
-        test_locs = (0, 0)
-        for r in range(len(compressed_map)):
-            for c in range(len(compressed_map[r])):
-                if (compressed_map[r][c] != 0):
-                    curr_edges = 0
-                    for add in range(1, 2):
-                        if (compressed_map[min(len(compressed_map)-add, r+add)][c] == 0):
-                            curr_edges += 1
-                        if (compressed_map[max(0, r-add)][c] == 0):
-                            curr_edges += 1
-                        if (compressed_map[r][min(len(compressed_map[0])-add, c+add)] == 0):
-                            curr_edges += 1
-                        if (compressed_map[r][max(0, c-add)] == 0):
-                            curr_edges += 1
-                        if (compressed_map[min(len(compressed_map)-add, r+add)][min(len(compressed_map[0])-add, c+add)] == 0):
-                            curr_edges += 1
-                        if (compressed_map[min(len(compressed_map)-add, r+add)][max(0, c-add)] == 0):
-                            curr_edges += 1
-                        if (compressed_map[max(0, r-add)][min(len(compressed_map[0])-add, c+add)] == 0):
-                            curr_edges += 1
-                        if (compressed_map[max(0, r-add)][max(0, c-add)] == 0):
-                            curr_edges += 1
-                    if (curr_edges > max_edges):
-                        test_loc = (c, r)
-                        max_edges = curr_edges
-        if 'test_loc' in globals():
-            print(test_loc)
-            print("scaled: " +
-                str((test_loc[0]*compress_factor, test_loc[1]*compress_factor)))
-        all_solns = []
-        tightness = 0
-        while (True):
-            all_solns = []
-            for r in range(len(compressed_map)):
-                for c in range(len(compressed_map[r])):
-                    if (compressed_map[r][c] != 0):
-                        curr_edges = 0
-                        for add in range(1, 2):
-                            if (compressed_map[min(len(compressed_map)-add, r+add)][c] == 0):
-                                curr_edges += 1
-                            if (compressed_map[max(0, r-add)][c] == 0):
-                                curr_edges += 1
-                            if (compressed_map[r][min(len(compressed_map[0])-add, c+add)] == 0):
-                                curr_edges += 1
-                            if (compressed_map[r][max(0, c-add)] == 0):
-                                curr_edges += 1
-                            if (compressed_map[min(len(compressed_map)-add, r+add)][min(len(compressed_map[0])-add, c+add)] == 0):
-                                curr_edges += 1
-                            if (compressed_map[min(len(compressed_map)-add, r+add)][max(0, c-add)] == 0):
-                                curr_edges += 1
-                            if (compressed_map[max(0, r-add)][min(len(compressed_map[0])-add, c+add)] == 0):
-                                curr_edges += 1
-                            if (compressed_map[max(0, r-add)][max(0, c-add)] == 0):
-                                curr_edges += 1
-                        if (max_edges-tightness <= curr_edges <= max_edges+tightness):
-                            all_solns += [(c, r)]
-            print("ALL SOLUTIONS TIGHTNESS "+str(tightness) + ": "+str(all_solns))
-            if (len(all_solns) >= 2):
-                min_x = 100000
-                max_x = 0
-                for soln in all_solns:
-                    if soln[0] < min_x:
-                        min_x = soln[0]
-                    if soln[0] > max_x:
-                        max_x = soln[0]
-                if (max_x-min_x) > 2:
-                    break
-            tightness += 1
+        # for r in range(rows_comp):
+        #     if r != 0:
+        #         r = float(r) - 0.5
+        #     for c in range(cols_comp):
+        #         if c != 0:
+        #             c = float(c) - 0.5
+        #         for add in range(1, 5):
+        #             if (new_di_data[int(min(len(new_di_data)-add, r*compress_factor+add))][int(c*compress_factor)] != 0):
+        #                 compressed_map[int(r)][int(c)] = 255
+        #                 break
+        #             if (new_di_data[int(max(0, r*compress_factor-add))][int(c*compress_factor)] != 0):
+        #                 compressed_map[int(r)][int(c)] = 255
+        #                 break
+        #             if (new_di_data[int(r*compress_factor)][int(min(len(new_di_data[0])-add, c*compress_factor+add))] != 0):
+        #                 compressed_map[int(r)][int(c)] = 255
+        #                 break
+        #             if (new_di_data[int(r*compress_factor)][int(max(0, c*compress_factor-add))] != 0):
+        #                 compressed_map[int(r)][int(c)] = 255
+        #                 break
+        #             if (new_di_data[int(min(len(new_di_data)-add, r*compress_factor+add))][int(min(len(new_di_data[0])-add, c*compress_factor+add))] != 0):
+        #                 compressed_map[int(r)][int(c)] = 255
+        #                 break
+        #             if (new_di_data[int(min(len(new_di_data)-add, r*compress_factor+add))][int(max(0, c*compress_factor-add))] != 0):
+        #                 compressed_map[int(r)][int(c)] = 255
+        #                 break
+        #             if (new_di_data[int(max(0, r*compress_factor-add))][int(min(len(new_di_data[0])-add, c*compress_factor+add))] != 0):
+        #                 compressed_map[int(r)][int(c)] = 255
+        #                 break
+        #             if (new_di_data[int(max(0, r*compress_factor-add))][int(max(0, c*compress_factor-add))] != 0):
+        #                 compressed_map[int(r)][int(c)] = 255
+        #                 break
+        # max_edges = 0
+        # test_locs = (0, 0)
+        # for r in range(len(compressed_map)):
+        #     for c in range(len(compressed_map[r])):
+        #         if (compressed_map[r][c] != 0):
+        #             curr_edges = 0
+        #             for add in range(1, 2):
+        #                 if (compressed_map[min(len(compressed_map)-add, r+add)][c] == 0):
+        #                     curr_edges += 1
+        #                 if (compressed_map[max(0, r-add)][c] == 0):
+        #                     curr_edges += 1
+        #                 if (compressed_map[r][min(len(compressed_map[0])-add, c+add)] == 0):
+        #                     curr_edges += 1
+        #                 if (compressed_map[r][max(0, c-add)] == 0):
+        #                     curr_edges += 1
+        #                 if (compressed_map[min(len(compressed_map)-add, r+add)][min(len(compressed_map[0])-add, c+add)] == 0):
+        #                     curr_edges += 1
+        #                 if (compressed_map[min(len(compressed_map)-add, r+add)][max(0, c-add)] == 0):
+        #                     curr_edges += 1
+        #                 if (compressed_map[max(0, r-add)][min(len(compressed_map[0])-add, c+add)] == 0):
+        #                     curr_edges += 1
+        #                 if (compressed_map[max(0, r-add)][max(0, c-add)] == 0):
+        #                     curr_edges += 1
+        #             if (curr_edges > max_edges):
+        #                 test_loc = (c, r)
+        #                 max_edges = curr_edges
+        # if 'test_loc' in globals():
+        #     print(test_loc)
+        #     print("scaled: " +
+        #         str((test_loc[0]*compress_factor, test_loc[1]*compress_factor)))
+        # all_solns = []
+        # tightness = 0
+        # while (True):
+        #     all_solns = []
+        #     for r in range(len(compressed_map)):
+        #         for c in range(len(compressed_map[r])):
+        #             if (compressed_map[r][c] != 0):
+        #                 curr_edges = 0
+        #                 for add in range(1, 2):
+        #                     if (compressed_map[min(len(compressed_map)-add, r+add)][c] == 0):
+        #                         curr_edges += 1
+        #                     if (compressed_map[max(0, r-add)][c] == 0):
+        #                         curr_edges += 1
+        #                     if (compressed_map[r][min(len(compressed_map[0])-add, c+add)] == 0):
+        #                         curr_edges += 1
+        #                     if (compressed_map[r][max(0, c-add)] == 0):
+        #                         curr_edges += 1
+        #                     if (compressed_map[min(len(compressed_map)-add, r+add)][min(len(compressed_map[0])-add, c+add)] == 0):
+        #                         curr_edges += 1
+        #                     if (compressed_map[min(len(compressed_map)-add, r+add)][max(0, c-add)] == 0):
+        #                         curr_edges += 1
+        #                     if (compressed_map[max(0, r-add)][min(len(compressed_map[0])-add, c+add)] == 0):
+        #                         curr_edges += 1
+        #                     if (compressed_map[max(0, r-add)][max(0, c-add)] == 0):
+        #                         curr_edges += 1
+        #                 if (max_edges-tightness <= curr_edges <= max_edges+tightness):
+        #                     all_solns += [(c, r)]
+        #     print("ALL SOLUTIONS TIGHTNESS "+str(tightness) + ": "+str(all_solns))
+        #     if (len(all_solns) >= 2):
+        #         min_x = 100000
+        #         max_x = 0
+        #         for soln in all_solns:
+        #             if soln[0] < min_x:
+        #                 min_x = soln[0]
+        #             if soln[0] > max_x:
+        #                 max_x = soln[0]
+        #         if (max_x-min_x) > 2:
+        #             break
+        #     tightness += 1
 
       
 
@@ -1071,13 +1082,21 @@ try:
         plt.imshow(three_mat_depth, interpolation="nearest")
         plt.show()
         
-        transformed_channel_cloud = new_transf.apply(channel_cloud)
-        image_channel = iface.cam.intrinsics.project_to_image(
-            transformed_channel_cloud, round_px=False)  # should this be transformed_channel_cloud?
-        image_channel_data = image_channel._image_data()
+        # transformed_channel_cloud = new_transf.apply(channel_cloud)
+        # image_channel = iface.cam.intrinsics.project_to_image(
+        #     transformed_channel_cloud, round_px=False)  # should this be transformed_channel_cloud?
+        # image_channel_data = image_channel._image_data()
         
-        make_bounding_boxes(image_channel_data)
+        # make_bounding_boxes(image_channel_data)
         
+        blank = np.zeros((len(three_mat_depth[0]), len(three_mat_depth)))
+        # for every point in the ropecloud we set it to 1 so we have our cable segment
+        for r,c in channel_cloud_pixels:
+            blank[r][c] = 1
+        image_channel_data = blank
+        plt.title("image_channel_data")
+        plt.imshow(image_channel_data)
+        plt.show()
         image_channel_data = gaussian_filter(image_channel_data, sigma=1)
         channel_skeleton = skeletonize_img(image_channel_data)
 
@@ -1427,6 +1446,12 @@ try:
         # else:
         #     take_action_2(point, point_2, place_point, place_point_2)
     
+
+
+
+
+
+
     # this is for if anything breaks then we just move onto the pushing task 
 except Exception:
     traceback.print_exc()
