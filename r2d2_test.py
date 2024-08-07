@@ -34,7 +34,6 @@ def main():
     pointcloud_list = []
     index =0
 
-
     for cam_id in cam_ids:
         init.set_from_serial_number(cam_id)
         name_list.append("ZED {}".format(cam_id))
@@ -43,7 +42,6 @@ def main():
         left_list.append(sl.Mat())
         pointcloud_list.append(sl.Mat())
         status = zed_list[index].open(init)
-        breakpoint()
         if status != sl.ERROR_CODE.SUCCESS:
             print(repr(status))
             zed_list[index].close()
@@ -60,7 +58,6 @@ def main():
             if zed_list[index].grab() == sl.ERROR_CODE.SUCCESS:
                 zed_list[index].retrieve_image(left_list[index], sl.VIEW.LEFT)
                 zed_list[index].retrieve_measure(pointcloud_list[index], sl.MEASURE.XYZRGBA)
-    breakpoint()
                 
 
 
@@ -171,29 +168,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-# # robot =  ServerInterface(ip_address=nuc_ip)
-# # # while True:
-# #     # TODO effect of force?
-# # # if we want to grasp tightly, we call grasp once. Other than velocity, no parameters matter. Alternatively, this is equivalent to use velocity=True in goto.
-# # # if we want to go to a width, we need to use a while loop. velocity=False. absolute width is between 0 and 0.085. force doesn't matter?
-# #     # robot.update_gripper_analytic(0.95,velocity=True, blocking=True, force=0.01)
-# # current_joints=robot.get_joint_positions()
-# # print(current_joints)
-# # # robot.update_joints(np.array([0.1,0.3,0.3,0.3,0.3,0.3,0.3]), velocity=True)
-# # # robot.update_joints(np.array([ 0.24807443,0.4416678,0.48023671 ,-1.84507334, 0.35278192,2.49715495,
-# # # 0.28128988]), velocity=False, blocking=True)
-# # robot.update_pose(np.array([0.5058340430259705, 0.4134461283683777, 0.31671109795570374, -2.6820327400280735, 0.006462129940462802, 0.14385363878820034]),velocity=False, blocking=True)
-# # time.sleep(0.3)
-# # current_joints=robot.get_joint_positions()
-# # print(current_joints)
-# # time.sleep(0.5)
-# # current_pose = robot.get_ee_pose()
 # # robot_state = robot.get_robot_state()
 # # print("ee_pose:",current_pose)
 # # print(robot_state)
